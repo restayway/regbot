@@ -238,6 +238,8 @@ REGBOT_SCHEDULER_RUN_ON_START=true
 
 This override executes the normal workflow immediately. Keep `apply: false`
 during smoke testing unless real deletion is explicitly intended.
+The completion log reports discovery and policy counts, including
+`discovered`, `protected`, and `planned`; `deleted` remains zero in dry-run.
 
 Health and metrics are reachable from the same network:
 

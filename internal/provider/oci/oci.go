@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,6 +23,7 @@ import (
 )
 
 const manifestAccept = "application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json"
+const indexMediaType = "application/vnd.oci.image.index.v1+json"
 
 type Client struct {
 	name         string
@@ -200,33 +202,153 @@ func (c *Client) listRepository(ctx context.Context, repository string) ([]provi
 
 func (c *Client) referrers(ctx context.Context, repository, digest string) ([]string, error) {
 	path := "/v2/" + escapeRepository(repository) + "/referrers/" + url.PathEscape(digest)
-	response, err := c.do(ctx, http.MethodGet, path, nil, "application/vnd.oci.image.index.v1+json")
+	response, err := c.do(ctx, http.MethodGet, path, nil, indexMediaType)
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
 	if response.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("registry does not expose OCI referrers for %s@%s; refusing destructive discovery", repository, digest)
+		response.Body.Close()
+		return c.referrersByTag(ctx, repository, digest)
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, responseError(response)
+		err := responseError(response)
+		response.Body.Close()
+		return nil, err
+	}
+	defer response.Body.Close()
+	return decodeReferrersIndex(response, repository, digest, "referrers API")
+}
+
+func (c *Client) referrersByTag(ctx context.Context, repository, digest string) ([]string, error) {
+	tag, err := referrersTag(digest)
+	if err != nil {
+		return nil, fmt.Errorf("derive referrers tag for %s@%s: %w", repository, digest, err)
+	}
+	path := "/v2/" + escapeRepository(repository) + "/manifests/" + url.PathEscape(tag)
+	response, err := c.do(ctx, http.MethodGet, path, nil, indexMediaType)
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode == http.StatusNotFound {
+		response.Body.Close()
+		return nil, nil
+	}
+	if response.StatusCode != http.StatusOK {
+		err := responseError(response)
+		response.Body.Close()
+		return nil, fmt.Errorf("fetch referrers tag for %s@%s: %w", repository, digest, err)
+	}
+	defer response.Body.Close()
+	return decodeReferrersIndex(response, repository, digest, "referrers tag")
+}
+
+func decodeReferrersIndex(response *http.Response, repository, subject, source string) ([]string, error) {
+	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	if err != nil || mediaType != indexMediaType {
+		return nil, fmt.Errorf("%s for %s@%s returned invalid content type %q", source, repository, subject, response.Header.Get("Content-Type"))
 	}
 	var index struct {
-		Manifests []struct {
+		SchemaVersion int    `json:"schemaVersion"`
+		MediaType     string `json:"mediaType"`
+		Manifests     []struct {
 			Digest string `json:"digest"`
 		} `json:"manifests"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&index); err != nil {
-		return nil, fmt.Errorf("decode referrers for %s@%s: %w", repository, digest, err)
+		return nil, fmt.Errorf("decode %s for %s@%s: %w", source, repository, subject, err)
 	}
+	if index.SchemaVersion != 2 {
+		return nil, fmt.Errorf("%s for %s@%s has invalid schemaVersion %d", source, repository, subject, index.SchemaVersion)
+	}
+	if index.MediaType != "" && index.MediaType != indexMediaType {
+		return nil, fmt.Errorf("%s for %s@%s has invalid mediaType %q", source, repository, subject, index.MediaType)
+	}
+	seen := make(map[string]struct{}, len(index.Manifests))
 	result := make([]string, 0, len(index.Manifests))
 	for _, descriptor := range index.Manifests {
-		if descriptor.Digest != "" {
+		if !validDigest(descriptor.Digest) {
+			return nil, fmt.Errorf("%s for %s@%s contains invalid descriptor digest %q", source, repository, subject, descriptor.Digest)
+		}
+		if _, ok := seen[descriptor.Digest]; !ok {
+			seen[descriptor.Digest] = struct{}{}
 			result = append(result, descriptor.Digest)
 		}
 	}
 	sort.Strings(result)
 	return result, nil
+}
+
+func referrersTag(digest string) (string, error) {
+	algorithm, encoded, ok := strings.Cut(digest, ":")
+	if !ok || !validDigest(digest) {
+		return "", fmt.Errorf("invalid digest %q", digest)
+	}
+	algorithm = truncate(algorithm, 32)
+	encoded = truncate(encoded, 64)
+	return sanitizeTagPart(algorithm) + "-" + sanitizeTagPart(encoded), nil
+}
+
+func validDigest(digest string) bool {
+	algorithm, encoded, ok := strings.Cut(digest, ":")
+	if !ok || algorithm == "" || encoded == "" {
+		return false
+	}
+	for i, r := range algorithm {
+		if i == 0 {
+			if !isASCIIAlpha(r) {
+				return false
+			}
+			continue
+		}
+		if !isASCIIAlphaNumeric(r) && !strings.ContainsRune("+._-", r) {
+			return false
+		}
+	}
+	for _, r := range encoded {
+		if !isASCIIAlphaNumeric(r) && !strings.ContainsRune("=_-", r) {
+			return false
+		}
+	}
+	switch algorithm {
+	case "sha256":
+		return len(encoded) == 64 && isLowerHex(encoded)
+	case "sha512":
+		return len(encoded) == 128 && isLowerHex(encoded)
+	}
+	return true
+}
+
+func sanitizeTagPart(value string) string {
+	return strings.Map(func(r rune) rune {
+		if isASCIIAlphaNumeric(r) || strings.ContainsRune("_.-", r) {
+			return r
+		}
+		return '-'
+	}, value)
+}
+
+func truncate(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	return value[:limit]
+}
+
+func isASCIIAlpha(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z'
+}
+
+func isASCIIAlphaNumeric(r rune) bool {
+	return isASCIIAlpha(r) || r >= '0' && r <= '9'
+}
+
+func isLowerHex(value string) bool {
+	for _, r := range value {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Client) resolve(ctx context.Context, repository, reference string) (provider.Artifact, error) {

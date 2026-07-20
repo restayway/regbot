@@ -21,8 +21,16 @@ const defaultRunTimeout = time.Hour
 
 var scheduleParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 
+// RunSummary contains low-cardinality counts for one scheduled workflow.
+type RunSummary struct {
+	Result     plan.Result
+	DryRun     bool
+	Discovered int
+	Protected  int
+}
+
 // RunFunc executes one complete scheduled plan/apply workflow.
-type RunFunc func(context.Context) (plan.Result, error)
+type RunFunc func(context.Context) (RunSummary, error)
 
 // Scheduler runs a workflow on a cron schedule and serves operational endpoints.
 type Scheduler struct {
@@ -162,7 +170,8 @@ func (s *Scheduler) execute(
 	s.Logger.Info("scheduled run started", "scheduled_at", scheduledAt)
 
 	started := time.Now().UTC()
-	result, err := s.Run(runCtx)
+	summary, err := s.Run(runCtx)
+	result := summary.Result
 	if result.StartedAt.IsZero() {
 		result.StartedAt = started
 	}
@@ -173,11 +182,14 @@ func (s *Scheduler) execute(
 	scheduleMetrics.LastRunTimestamp.Set(float64(result.FinishedAt.Unix()))
 
 	attributes := []any{
+		"dry_run", summary.DryRun,
+		"discovered", summary.Discovered,
+		"protected", summary.Protected,
 		"planned", result.Planned,
 		"deleted", result.Deleted,
 		"skipped", result.Skipped,
 		"failed", result.Failed,
-		"duration", result.FinishedAt.Sub(result.StartedAt),
+		"duration_seconds", result.FinishedAt.Sub(result.StartedAt).Seconds(),
 	}
 	if err != nil {
 		attributes = append(attributes, "error", err)

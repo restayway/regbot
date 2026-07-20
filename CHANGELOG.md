@@ -12,3 +12,10 @@ The format follows Keep a Changelog, and releases use Semantic Versioning.
 - Built-in cron scheduler with explicit timezones, run timeouts, overlap
   protection, health/readiness endpoints, and Prometheus metrics.
 - `REGBOT_SCHEDULER_RUN_ON_START` deployment smoke-test override.
+
+### Fixed
+
+- Fall back to the OCI referrers tag schema when a registry does not implement
+  the native Referrers API.
+- Emit readable scheduler duration seconds and dry-run discovery summary
+  counts.

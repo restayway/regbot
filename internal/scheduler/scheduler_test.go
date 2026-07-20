@@ -1,11 +1,13 @@
 package scheduler
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,9 +49,9 @@ func TestRunOnStart(t *testing.T) {
 	instance := &Scheduler{
 		Location: time.UTC, RunOnStart: true, Timeout: time.Second,
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Run: func(context.Context) (plan.Result, error) {
+		Run: func(context.Context) (RunSummary, error) {
 			called <- struct{}{}
-			return plan.Result{Planned: 2}, nil
+			return RunSummary{Result: plan.Result{Planned: 2}}, nil
 		},
 	}
 	done := make(chan struct{})
@@ -78,9 +80,9 @@ func TestListenAndServeRunsOnStartAndShutsDown(t *testing.T) {
 		Address: "127.0.0.1:0", Expression: "17 3 * * *", Location: time.UTC,
 		RunOnStart: true, Timeout: time.Second,
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Run: func(context.Context) (plan.Result, error) {
+		Run: func(context.Context) (RunSummary, error) {
 			called <- struct{}{}
-			return plan.Result{Planned: 1}, nil
+			return RunSummary{Result: plan.Result{Planned: 1}}, nil
 		},
 	}
 	done := make(chan error, 1)
@@ -125,15 +127,43 @@ func TestRunTimeoutCancelsExecution(t *testing.T) {
 	instance := &Scheduler{
 		Timeout: 10 * time.Millisecond,
 		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Run: func(ctx context.Context) (plan.Result, error) {
+		Run: func(ctx context.Context) (RunSummary, error) {
 			<-ctx.Done()
 			canceled <- ctx.Err()
-			return plan.Result{}, ctx.Err()
+			return RunSummary{}, ctx.Err()
 		},
 	}
 	instance.execute(context.Background(), time.Now(), runMetrics, scheduleMetrics)
 	if err := <-canceled; err != context.DeadlineExceeded {
 		t.Fatalf("run context error = %v, want %v", err, context.DeadlineExceeded)
+	}
+}
+
+func TestDryRunSummaryIsLogged(t *testing.T) {
+	t.Parallel()
+	registry := prometheus.NewRegistry()
+	runMetrics := metrics.New(registry)
+	scheduleMetrics := metrics.NewScheduler(registry)
+	var output bytes.Buffer
+	instance := &Scheduler{
+		Timeout: time.Second,
+		Logger:  slog.New(slog.NewJSONHandler(&output, nil)),
+		Run: func(context.Context) (RunSummary, error) {
+			return RunSummary{
+				DryRun: true, Discovered: 12, Protected: 8,
+				Result: plan.Result{Planned: 4},
+			}, nil
+		},
+	}
+	instance.execute(context.Background(), time.Now(), runMetrics, scheduleMetrics)
+	logged := output.String()
+	for _, field := range []string{
+		`"dry_run":true`, `"discovered":12`, `"protected":8`,
+		`"planned":4`, `"deleted":0`, `"duration_seconds":`,
+	} {
+		if !strings.Contains(logged, field) {
+			t.Errorf("log does not contain %s: %s", field, logged)
+		}
 	}
 }
 

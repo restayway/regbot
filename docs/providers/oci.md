@@ -7,6 +7,12 @@ It supports basic authentication and standard bearer-token challenges. Catalog
 and tag pagination follow `Link` headers. Manifest negotiation includes OCI
 manifests/indexes and Docker schema 2 manifests/lists.
 
+Regbot queries the OCI Referrers API before considering a manifest deletable.
+If the registry returns `404`, Regbot follows the OCI Distribution
+Specification and reads the digest-derived referrers tag. A missing fallback
+tag means no known referrers. Malformed indexes, invalid descriptor digests,
+unexpected media types, and unexpected status codes fail closed.
+
 Deletion is always performed with:
 
 ```text

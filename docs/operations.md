@@ -30,6 +30,9 @@ regbot scheduler --config /etc/regbot/regbot.yaml --listen 0.0.0.0:8080
 ```
 
 Scheduled runs never overlap and missed executions are not replayed.
+Completion logs include `dry_run`, `discovered`, `protected`, `planned`,
+`deleted`, `skipped`, `failed`, and `duration_seconds`. They intentionally omit
+repository, tag, and digest identifiers at INFO level.
 
 For Kubernetes, use a `CronJob` with `concurrencyPolicy: Forbid`, a read-only
 root filesystem, a non-root user, and secrets mounted as files or environment

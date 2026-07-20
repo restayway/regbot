@@ -139,7 +139,7 @@ func schedulerCommand(opts *options, stderr io.Writer) *cobra.Command {
 			return (&scheduler.Scheduler{
 				Address: address, Expression: configured.Cron, Location: location,
 				RunOnStart: runOnStart, Timeout: configured.Timeout.Duration,
-				Run: func(ctx context.Context) (plan.Result, error) {
+				Run: func(ctx context.Context) (scheduler.RunSummary, error) {
 					return executeScheduledRun(ctx, runner)
 				},
 				Logger: runner.Logger,
@@ -162,21 +162,30 @@ func schedulerRunOnStart(configured bool) (bool, error) {
 	return parsed, nil
 }
 
-func executeScheduledRun(ctx context.Context, runner *engine.Engine) (plan.Result, error) {
+func executeScheduledRun(ctx context.Context, runner *engine.Engine) (scheduler.RunSummary, error) {
 	started := time.Now().UTC()
 	proposal, err := runner.Plan(ctx)
 	if err != nil {
-		return plan.Result{Version: plan.FormatVersion, StartedAt: started, FinishedAt: time.Now().UTC()}, err
+		return scheduler.RunSummary{
+			Result: plan.Result{Version: plan.FormatVersion, StartedAt: started, FinishedAt: time.Now().UTC()},
+			DryRun: !runner.Config.Apply,
+		}, err
+	}
+	summary := scheduler.RunSummary{
+		DryRun: !runner.Config.Apply, Discovered: proposal.DiscoveredCount,
+		Protected: proposal.ProtectedCount,
 	}
 	if !runner.Config.Apply {
-		return plan.Result{
+		summary.Result = plan.Result{
 			Version: plan.FormatVersion, StartedAt: started, FinishedAt: time.Now().UTC(),
 			Planned: len(proposal.Actions),
-		}, nil
+		}
+		return summary, nil
 	}
 	result, applyErr := runner.Apply(ctx, proposal)
 	deliverHookLogged(ctx, runner, result)
-	return result, applyErr
+	summary.Result = result
+	return summary, applyErr
 }
 
 func healthcheckCommand(stdout io.Writer) *cobra.Command {
