@@ -121,7 +121,7 @@ apply: false
 registries:
   internal:
     provider: oci
-    endpoint: https://registry.restayway.net
+    endpoint: https://registry.example.com
     credentials:
       username_env: REGBOT_REGISTRY_USERNAME
       password_env: REGBOT_REGISTRY_PASSWORD
@@ -131,8 +131,8 @@ policies:
     targets:
       - registry: internal
         repositories:
-          include: ["restayway/*"]
-          exclude: ["restayway/archive-*"]
+          include: ["example-org/*"]
+          exclude: ["example-org/archive-*"]
     tags:
       parser: calendar
     retention:

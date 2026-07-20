@@ -4,7 +4,7 @@ apply: false
 registries:
   github:
     provider: github
-    owner: restayway
+    owner: example-org
     owner_type: organization
     token_env: GITHUB_TOKEN
     timeout: 30s

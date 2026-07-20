@@ -13,13 +13,13 @@ registries:
   local:
     provider: oci
     endpoint: https://registry.example.com
-    repositories: [restayway/api]
+    repositories: [example-org/api]
 policies:
   default:
     targets:
       - registry: local
         repositories:
-          include: ["restayway/*"]
+          include: ["example-org/*"]
     tags:
       parser: calendar
     retention:

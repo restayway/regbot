@@ -45,7 +45,7 @@ registries:
   github:
     provider: github
     endpoint: https://api.github.com # optional
-    owner: restayway
+    owner: example-org
     owner_type: organization
     token_env: GITHUB_TOKEN
     timeout: 30s

@@ -4,7 +4,7 @@ apply: false
 registries:
   internal:
     provider: oci
-    endpoint: https://registry.restayway.net
+    endpoint: https://registry.example.com
     credentials:
       username_env: REGBOT_REGISTRY_USERNAME
       password_env: REGBOT_REGISTRY_PASSWORD
@@ -12,7 +12,7 @@ registries:
 
   github:
     provider: github
-    owner: restayway
+    owner: example-org
     owner_type: organization
     token_env: GITHUB_TOKEN
     timeout: 30s
@@ -22,7 +22,7 @@ policies:
     targets:
       - registry: internal
         repositories:
-          include: ["restayway/*"]
+          include: ["example-org/*"]
     tags:
       parser: calendar
       patterns:

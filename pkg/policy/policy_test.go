@@ -78,10 +78,10 @@ func TestEvaluateProtectsUnparsedSharedAndReferrers(t *testing.T) {
 
 func TestMatchRepository(t *testing.T) {
 	t.Parallel()
-	if !MatchRepository("restayway/api", []string{"restayway/*"}, nil) {
+	if !MatchRepository("example-org/api", []string{"example-org/*"}, nil) {
 		t.Fatal("expected include match")
 	}
-	if MatchRepository("restayway/archive-api", []string{"restayway/*"}, []string{"restayway/archive-*"}) {
+	if MatchRepository("example-org/archive-api", []string{"example-org/*"}, []string{"example-org/archive-*"}) {
 		t.Fatal("expected exclude match")
 	}
 }

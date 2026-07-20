@@ -4,7 +4,7 @@ apply: false
 registries:
   internal:
     provider: oci
-    endpoint: https://registry.restayway.net
+    endpoint: https://registry.example.com
     credentials:
       username_file: /run/secrets/registry_username
       password_file: /run/secrets/registry_password
@@ -15,7 +15,7 @@ policies:
     targets:
       - registry: internal
         repositories:
-          include: ["restayway/*"]
+          include: ["example-org/*"]
     tags:
       parser: calendar
       patterns:

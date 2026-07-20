@@ -19,15 +19,15 @@ func TestListAndDeleteVersion(t *testing.T) {
 			return
 		}
 		switch {
-		case request.Method == http.MethodGet && request.URL.Path == "/orgs/restayway":
-			_, _ = writer.Write([]byte(`{"login":"restayway"}`))
-		case request.Method == http.MethodGet && request.URL.Path == "/orgs/restayway/packages":
+		case request.Method == http.MethodGet && request.URL.Path == "/orgs/example-org":
+			_, _ = writer.Write([]byte(`{"login":"example-org"}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/orgs/example-org/packages":
 			_, _ = writer.Write([]byte(`[{"name":"api"}]`))
-		case request.Method == http.MethodGet && request.URL.Path == "/orgs/restayway/packages/container/api/versions":
+		case request.Method == http.MethodGet && request.URL.Path == "/orgs/example-org/packages/container/api/versions":
 			_, _ = writer.Write([]byte(`[{"id":42,"name":"sha256:abc","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","metadata":{"container":{"tags":["v2026.01.01.1-api"]}}}]`))
-		case request.Method == http.MethodGet && request.URL.Path == "/orgs/restayway/packages/container/api/versions/42":
+		case request.Method == http.MethodGet && request.URL.Path == "/orgs/example-org/packages/container/api/versions/42":
 			_, _ = writer.Write([]byte(`{"id":42,"name":"sha256:abc","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","metadata":{"container":{"tags":["v2026.01.01.1-api"]}}}`))
-		case request.Method == http.MethodDelete && request.URL.Path == "/orgs/restayway/packages/container/api/versions/42":
+		case request.Method == http.MethodDelete && request.URL.Path == "/orgs/example-org/packages/container/api/versions/42":
 			deleted.Store(true)
 			writer.WriteHeader(http.StatusNoContent)
 		default:
@@ -36,7 +36,7 @@ func TestListAndDeleteVersion(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New("github", server.URL, "restayway", "organization", "test-token", 0)
+	client, err := New("github", server.URL, "example-org", "organization", "test-token", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
