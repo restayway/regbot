@@ -41,6 +41,10 @@ discover → normalize → group → evaluate → enforce safety → plan → ap
 Regbot is an early v1 implementation. The configuration and plan formats are
 versioned, but releases before `v1.0.0` may contain breaking changes.
 
+Regbot releases use Semantic Versioning tags such as `v0.1.0`. Calendar
+versions such as `v2026.07.20.1-api` describe container images managed by
+Regbot; they are not Regbot release versions.
+
 Supported:
 
 - OCI Distribution-compatible registries, including CNCF Distribution 3.x

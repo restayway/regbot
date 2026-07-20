@@ -10,6 +10,7 @@ export REGBOT_IMAGE=ghcr.io/restayway/regbot:<version>
 
 Do not use `latest` for automated deletion. The examples default to dry-run and
 must be reviewed before changing `apply: false` to `apply: true`.
+Release image tags retain the Git tag's `v` prefix, for example `v0.1.0`.
 
 Regbot does not need the Docker socket, privileged mode, Cloudflare R2
 credentials, or direct access to registry storage.
