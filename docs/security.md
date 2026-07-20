@@ -27,5 +27,10 @@ Bind `serve` to loopback or a private network. Configure
 terminate TLS at a trusted proxy, and apply network policy. The one-shot model
 is safer when HTTP execution is unnecessary.
 
+The `scheduler` command exposes health, readiness, and metrics only; it does not
+expose `/run` and therefore does not require a run token. Use exactly one
+scheduler replica. `REGBOT_SCHEDULER_RUN_ON_START=true` is a smoke-test
+override and can perform real deletion when `apply: true`.
+
 Do not enable `tls.insecure_skip_verify` outside disposable development
 environments.

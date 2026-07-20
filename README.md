@@ -50,7 +50,7 @@ Supported:
 - OCI Distribution-compatible registries, including CNCF Distribution 3.x
 - GitHub Container Registry organization and user packages
 - Calendar tags with optional app suffixes
-- One-shot CLI, Kubernetes CronJob, GitHub Actions, and optional HTTP mode
+- One-shot CLI, built-in scheduler, Kubernetes CronJob, GitHub Actions, and optional HTTP mode
 
 Not supported in v1:
 
@@ -58,7 +58,7 @@ Not supported in v1:
 - Docker Hub-specific management APIs
 - Direct R2/S3 lifecycle or object deletion
 - Cascading deletion of signatures, SBOMs, or attestations
-- A web UI, persistent database, or built-in scheduler
+- A web UI or persistent database
 
 ## Install
 
@@ -111,6 +111,15 @@ regbot apply --config regbot.yaml --plan plan.json
 For scheduled execution, `regbot run` plans and applies only when the
 configuration explicitly contains `apply: true`. Otherwise it remains a dry
 run.
+
+For a self-scheduling container, add a top-level `schedule` block and run:
+
+```sh
+regbot scheduler --config regbot.yaml --listen 0.0.0.0:8080
+```
+
+The scheduler exposes health, readiness, and low-cardinality metrics but no
+remote run endpoint. Use exactly one scheduler replica.
 
 ## Example policy
 

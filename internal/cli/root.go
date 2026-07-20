@@ -13,6 +13,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/restayway/regbot/internal/config"
@@ -20,6 +22,7 @@ import (
 	"github.com/restayway/regbot/internal/factory"
 	"github.com/restayway/regbot/internal/hook"
 	"github.com/restayway/regbot/internal/report"
+	"github.com/restayway/regbot/internal/scheduler"
 	"github.com/restayway/regbot/internal/server"
 	"github.com/restayway/regbot/pkg/plan"
 	"github.com/spf13/cobra"
@@ -76,7 +79,7 @@ func New(stdout, stderr io.Writer) *cobra.Command {
 	root.AddCommand(
 		validateCommand(opts, stdout, stderr), planCommand(opts, stdout, stderr),
 		applyCommand(opts, stdout, stderr), runCommand(opts, stdout, stderr),
-		serveCommand(opts, stdout, stderr), healthcheckCommand(stdout),
+		serveCommand(opts, stdout, stderr), schedulerCommand(opts, stderr), healthcheckCommand(stdout),
 		versionCommand(stdout),
 	)
 	return root
@@ -107,6 +110,73 @@ func serveCommand(opts *options, stdout, stderr io.Writer) *cobra.Command {
 	command.Flags().StringVar(&tokenFile, "run-token-file", "", "file containing the /run bearer token")
 	command.MarkFlagsMutuallyExclusive("run-token-env", "run-token-file")
 	return command
+}
+
+func schedulerCommand(opts *options, stderr io.Writer) *cobra.Command {
+	var address string
+	command := &cobra.Command{
+		Use: "scheduler", Short: "Run retention policies on an internal cron schedule",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			runner, err := load(opts, stderr)
+			if err != nil {
+				return configError(err)
+			}
+			if runner.Config.Schedule == nil {
+				return configError(errors.New("schedule configuration is required for scheduler"))
+			}
+			if err := runner.Validate(cmd.Context()); err != nil {
+				return err
+			}
+			location, err := time.LoadLocation(runner.Config.Schedule.Timezone)
+			if err != nil {
+				return configError(fmt.Errorf("load schedule timezone: %w", err))
+			}
+			runOnStart, err := schedulerRunOnStart(runner.Config.Schedule.RunOnStart)
+			if err != nil {
+				return configError(err)
+			}
+			configured := runner.Config.Schedule
+			return (&scheduler.Scheduler{
+				Address: address, Expression: configured.Cron, Location: location,
+				RunOnStart: runOnStart, Timeout: configured.Timeout.Duration,
+				Run: func(ctx context.Context) (plan.Result, error) {
+					return executeScheduledRun(ctx, runner)
+				},
+				Logger: runner.Logger,
+			}).ListenAndServe(cmd.Context())
+		},
+	}
+	command.Flags().StringVar(&address, "listen", "127.0.0.1:8080", "health and metrics listen address")
+	return command
+}
+
+func schedulerRunOnStart(configured bool) (bool, error) {
+	value, ok := os.LookupEnv("REGBOT_SCHEDULER_RUN_ON_START")
+	if !ok {
+		return configured, nil
+	}
+	parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+	if err != nil {
+		return false, fmt.Errorf("REGBOT_SCHEDULER_RUN_ON_START must be a boolean: %w", err)
+	}
+	return parsed, nil
+}
+
+func executeScheduledRun(ctx context.Context, runner *engine.Engine) (plan.Result, error) {
+	started := time.Now().UTC()
+	proposal, err := runner.Plan(ctx)
+	if err != nil {
+		return plan.Result{Version: plan.FormatVersion, StartedAt: started, FinishedAt: time.Now().UTC()}, err
+	}
+	if !runner.Config.Apply {
+		return plan.Result{
+			Version: plan.FormatVersion, StartedAt: started, FinishedAt: time.Now().UTC(),
+			Planned: len(proposal.Actions),
+		}, nil
+	}
+	result, applyErr := runner.Apply(ctx, proposal)
+	deliverHookLogged(ctx, runner, result)
+	return result, applyErr
 }
 
 func healthcheckCommand(stdout io.Writer) *cobra.Command {

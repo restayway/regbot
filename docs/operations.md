@@ -2,8 +2,9 @@
 
 ## Recommended execution model
 
-Run Regbot as a one-shot process. The platform owns scheduling and prevents
-overlap.
+Run Regbot as a one-shot process when the platform owns scheduling. For Docker
+Swarm and similar platforms without recurring jobs, use the built-in
+`scheduler` command with exactly one replica.
 
 For container deployments, see the complete
 [Docker Run and Docker Swarm guide](docker.md).
@@ -11,6 +12,24 @@ For container deployments, see the complete
 ```cron
 17 3 * * * /usr/local/bin/regbot run --config /etc/regbot/regbot.yaml
 ```
+
+The equivalent built-in configuration is:
+
+```yaml
+schedule:
+  cron: "17 3 * * *"
+  timezone: Europe/Istanbul
+  run_on_start: false
+  timeout: 1h
+```
+
+Run it with:
+
+```sh
+regbot scheduler --config /etc/regbot/regbot.yaml --listen 0.0.0.0:8080
+```
+
+Scheduled runs never overlap and missed executions are not replayed.
 
 For Kubernetes, use a `CronJob` with `concurrencyPolicy: Forbid`, a read-only
 root filesystem, a non-root user, and secrets mounted as files or environment

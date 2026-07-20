@@ -39,3 +39,20 @@ func TestHealthcheckCommand(t *testing.T) {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }
+
+func TestSchedulerRunOnStartEnvironment(t *testing.T) {
+	t.Setenv("REGBOT_SCHEDULER_RUN_ON_START", "true")
+	got, err := schedulerRunOnStart(false)
+	if err != nil || !got {
+		t.Fatalf("schedulerRunOnStart() = %v, %v", got, err)
+	}
+	t.Setenv("REGBOT_SCHEDULER_RUN_ON_START", "false")
+	got, err = schedulerRunOnStart(true)
+	if err != nil || got {
+		t.Fatalf("schedulerRunOnStart() = %v, %v, want false", got, err)
+	}
+	t.Setenv("REGBOT_SCHEDULER_RUN_ON_START", "invalid")
+	if _, err := schedulerRunOnStart(false); err == nil {
+		t.Fatal("expected invalid boolean error")
+	}
+}

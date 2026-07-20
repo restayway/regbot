@@ -1,6 +1,12 @@
 version: v1
 apply: false
 
+schedule:
+  cron: "17 3 * * *"
+  timezone: Europe/Istanbul
+  run_on_start: false
+  timeout: 1h
+
 registries:
   internal:
     provider: oci

@@ -24,7 +24,7 @@ docker run --rm regbot:local version
 
 The image runs as UID/GID `65532` and contains no shell, curl, or package
 manager. It intentionally has no image-wide `HEALTHCHECK`, because one-shot
-`plan`, `apply`, and `run` containers do not expose HTTP. The Swarm `serve`
+`plan`, `apply`, and `run` containers do not expose HTTP. The Swarm `scheduler`
 example adds an appropriate service-level health check.
 
 ## Configure Docker Run
@@ -173,16 +173,17 @@ Never bake credentials or private certificates into the image.
 ## Docker Swarm
 
 Swarm has no native recurring cron scheduler. The recommended Swarm deployment
-runs one authenticated Regbot HTTP service and lets an external scheduler call
-`POST /run`. The service rejects overlapping runs with HTTP `409 Conflict`.
+runs Regbot's built-in scheduler as one long-running replica. It does not need
+the Docker socket, a host cron entry, or an external call to `POST /run`.
 
 The provided stack:
 
 - Runs exactly one replica
+- Runs the configured five-field cron schedule internally
 - Keeps the root filesystem read-only
 - Drops every Linux capability
 - Stores configuration in a Docker Config
-- Stores credentials and the run token in Docker Secrets
+- Stores registry credentials in Docker Secrets
 - Exposes health and Prometheus metrics only on an internal, attachable overlay
   network
 - Starts with `apply: false`
@@ -194,7 +195,6 @@ Run these commands on a Swarm manager:
 ```sh
 printf '%s' 'registry-user' | docker secret create registry_username -
 printf '%s' 'registry-password' | docker secret create registry_password -
-openssl rand -hex 32 | docker secret create regbot_run_token -
 ```
 
 Do not add a trailing newline when creating username or password secrets.
@@ -218,30 +218,31 @@ docker service ps regbot_regbot
 docker service logs --follow regbot_regbot
 ```
 
-### Trigger a run from the overlay network
+No external trigger is required. The schedule is read from
+`swarm-regbot.yaml`:
 
-The stack intentionally publishes no host port. From a manager node, attach a
-short-lived curl container to the overlay network:
-
-```sh
-export REGBOT_RUN_TOKEN='<the-run-token>'
-export CURL_IMAGE=curlimages/curl:latest
-
-docker run --rm \
-  --network regbot_regbot \
-  "$CURL_IMAGE" \
-  --fail-with-body \
-  --request POST \
-  --header "Authorization: Bearer ${REGBOT_RUN_TOKEN}" \
-  http://regbot:8080/run
+```yaml
+schedule:
+  cron: "17 3 * * *"
+  timezone: Europe/Istanbul
+  run_on_start: false
+  timeout: 1h
 ```
 
-An external scheduler can run the same command. Protect its token and ensure it
-does not start another invocation before the previous command finishes.
+For one deployment smoke test, set the following environment variable on the
+service and remove it after the run succeeds:
+
+```text
+REGBOT_SCHEDULER_RUN_ON_START=true
+```
+
+This override executes the normal workflow immediately. Keep `apply: false`
+during smoke testing unless real deletion is explicitly intended.
 
 Health and metrics are reachable from the same network:
 
 ```sh
+export CURL_IMAGE=curlimages/curl:latest
 docker run --rm --network regbot_regbot "$CURL_IMAGE" \
   --fail http://regbot:8080/healthz
 
@@ -249,8 +250,9 @@ docker run --rm --network regbot_regbot "$CURL_IMAGE" \
   --fail http://regbot:8080/metrics
 ```
 
-If a published port is required, add this to the service and protect it with a
-firewall or private ingress:
+The scheduler listener has no `/run` route. If health or metrics must be
+published, add this to the service and still protect it with a firewall or
+private ingress:
 
 ```yaml
 ports:
@@ -260,8 +262,22 @@ ports:
     mode: ingress
 ```
 
-Never publish an unauthenticated `/run` endpoint. Regbot itself rejects
-non-loopback binding when no run token is configured.
+### Coswarm
+
+In Coswarm, leave the service command/entrypoint override empty and add these
+service arguments in order:
+
+```text
+scheduler
+--config=/etc/regbot/regbot.yaml
+--log-format=json
+--listen=0.0.0.0:8080
+```
+
+Use one replica and an `on-failure` restart policy. The mounted configuration
+must include the `schedule` block. Add
+`REGBOT_SCHEDULER_RUN_ON_START=true` only for an intentional startup smoke
+test, then remove it and redeploy.
 
 ### One-shot Swarm job
 

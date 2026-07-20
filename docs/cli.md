@@ -6,6 +6,7 @@ regbot plan --config FILE [--output table|json] [--out FILE]
 regbot apply --config FILE --plan FILE [--output table|json]
 regbot run --config FILE [--output table|json]
 regbot serve --config FILE [--listen ADDRESS] [--run-token-env NAME|--run-token-file FILE]
+regbot scheduler --config FILE [--listen ADDRESS]
 regbot healthcheck [--url URL] [--timeout DURATION]
 regbot version
 ```
@@ -28,3 +29,8 @@ Exit codes:
 | `6` | Partial apply failure. |
 
 Structured command output goes to stdout. Logs and errors go to stderr.
+
+`scheduler` requires the top-level `schedule` configuration and exposes only
+`/healthz`, `/readyz`, and `/metrics`. Set
+`REGBOT_SCHEDULER_RUN_ON_START=true` for a deployment smoke test. The override
+causes a real apply when the configuration contains `apply: true`.

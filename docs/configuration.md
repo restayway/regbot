@@ -8,10 +8,29 @@ limits, invalid durations, and missing target references are errors.
 | Field | Required | Description |
 | --- | --- | --- |
 | `version` | yes | Must be `v1`. |
-| `apply` | no | Defaults to `false`. Controls mutation in `run` and HTTP mode. |
+| `apply` | no | Defaults to `false`. Controls mutation in `run`, `scheduler`, and HTTP mode. |
+| `schedule` | for `scheduler` | Internal cron schedule and run timeout. |
 | `registries` | yes | Named OCI or GitHub connections. |
 | `policies` | yes | Named retention policies. |
 | `hooks.after_apply` | no | Optional post-apply webhook. |
+
+## Built-in schedule
+
+```yaml
+schedule:
+  cron: "17 3 * * *"
+  timezone: Europe/Istanbul
+  run_on_start: false
+  timeout: 1h
+```
+
+`cron` uses standard five-field syntax. `timezone` must be an IANA timezone.
+Missed executions are not replayed, and occurrences that overlap a running job
+are skipped. The timeout defaults to `1h`.
+
+`REGBOT_SCHEDULER_RUN_ON_START=true` overrides `run_on_start` for deployment
+smoke tests. Invalid boolean values prevent startup. Do not enable the override
+casually when `apply: true`.
 
 ## OCI registry
 

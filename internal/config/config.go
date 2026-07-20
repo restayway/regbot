@@ -10,14 +10,18 @@ import (
 	"time"
 
 	"github.com/restayway/regbot/pkg/policy"
+	"github.com/robfig/cron/v3"
 	"gopkg.in/yaml.v3"
 )
+
+var scheduleParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 
 type Config struct {
 	Version    string              `yaml:"version"`
 	Apply      bool                `yaml:"apply"`
 	Registries map[string]Registry `yaml:"registries"`
 	Policies   map[string]Policy   `yaml:"policies"`
+	Schedule   *Schedule           `yaml:"schedule,omitempty"`
 	Hooks      Hooks               `yaml:"hooks,omitempty"`
 }
 
@@ -89,6 +93,13 @@ type Safety struct {
 	MaxDeleteCount   int     `yaml:"max_delete_count"`
 	MaxDeletePercent float64 `yaml:"max_delete_percent"`
 	RequireTagged    *bool   `yaml:"require_tagged_artifact,omitempty"`
+}
+
+type Schedule struct {
+	Cron       string   `yaml:"cron"`
+	Timezone   string   `yaml:"timezone"`
+	RunOnStart bool     `yaml:"run_on_start,omitempty"`
+	Timeout    Duration `yaml:"timeout,omitempty"`
 }
 
 type Hooks struct {
@@ -211,6 +222,21 @@ func (c *Config) Validate() error {
 	}
 	if c.Hooks.AfterApply != nil && c.Hooks.AfterApply.Type != "webhook" {
 		errs = append(errs, fmt.Errorf("hooks.after_apply.type must be webhook"))
+	}
+	if c.Schedule != nil {
+		if c.Schedule.Cron == "" {
+			errs = append(errs, errors.New("schedule.cron is required"))
+		} else if _, err := scheduleParser.Parse(c.Schedule.Cron); err != nil {
+			errs = append(errs, fmt.Errorf("schedule.cron: %w", err))
+		}
+		if c.Schedule.Timezone == "" {
+			errs = append(errs, errors.New("schedule.timezone is required"))
+		} else if _, err := time.LoadLocation(c.Schedule.Timezone); err != nil {
+			errs = append(errs, fmt.Errorf("schedule.timezone: %w", err))
+		}
+		if c.Schedule.Timeout.Duration < 0 {
+			errs = append(errs, errors.New("schedule.timeout must be positive"))
+		}
 	}
 	return errors.Join(errs...)
 }

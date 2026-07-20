@@ -1,16 +1,12 @@
-version: "3.9"
-
 services:
   regbot:
-    image: ${REGBOT_IMAGE:-ghcr.io/restayway/regbot:v0.1.0}
+    image: ${REGBOT_IMAGE:-ghcr.io/restayway/regbot:v0.2.0}
     command:
-      - serve
+      - scheduler
       - --config
       - /etc/regbot/regbot.yaml
       - --listen
       - 0.0.0.0:8080
-      - --run-token-file
-      - /run/secrets/regbot_run_token
       - --log-format
       - json
     user: "65532:65532"
@@ -22,7 +18,6 @@ services:
     secrets:
       - registry_username
       - registry_password
-      - regbot_run_token
     networks:
       - regbot
     healthcheck:
@@ -63,8 +58,6 @@ secrets:
   registry_username:
     external: true
   registry_password:
-    external: true
-  regbot_run_token:
     external: true
 
 networks:

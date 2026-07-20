@@ -12,6 +12,14 @@ type Metrics struct {
 	RunSeconds prometheus.Histogram
 }
 
+// Scheduler contains scheduler-specific, low-cardinality metrics.
+type Scheduler struct {
+	LastRunTimestamp prometheus.Gauge
+	NextRunTimestamp prometheus.Gauge
+	Running          prometheus.Gauge
+	SkippedOverlaps  prometheus.Counter
+}
+
 func New(registerer prometheus.Registerer) *Metrics {
 	metrics := &Metrics{
 		Runs: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -28,6 +36,35 @@ func New(registerer prometheus.Registerer) *Metrics {
 	return metrics
 }
 
+// NewScheduler registers and returns scheduler lifecycle metrics.
+func NewScheduler(registerer prometheus.Registerer) *Scheduler {
+	metrics := &Scheduler{
+		LastRunTimestamp: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "regbot_scheduler_last_run_timestamp_seconds",
+			Help: "Unix timestamp of the last completed scheduled run.",
+		}),
+		NextRunTimestamp: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "regbot_scheduler_next_run_timestamp_seconds",
+			Help: "Unix timestamp of the next scheduled run.",
+		}),
+		Running: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "regbot_scheduler_running",
+			Help: "Whether a scheduled run is currently active.",
+		}),
+		SkippedOverlaps: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "regbot_scheduler_skipped_overlaps_total",
+			Help: "Scheduled occurrences skipped because the previous run was still active.",
+		}),
+	}
+	registerer.MustRegister(
+		metrics.LastRunTimestamp,
+		metrics.NextRunTimestamp,
+		metrics.Running,
+		metrics.SkippedOverlaps,
+	)
+	return metrics
+}
+
 func (m *Metrics) Observe(result plan.Result, err error) {
 	status := "success"
 	if err != nil {
@@ -38,5 +75,7 @@ func (m *Metrics) Observe(result plan.Result, err error) {
 	m.Artifacts.WithLabelValues("deleted").Add(float64(result.Deleted))
 	m.Artifacts.WithLabelValues("skipped").Add(float64(result.Skipped))
 	m.Artifacts.WithLabelValues("failed").Add(float64(result.Failed))
-	m.RunSeconds.Observe(result.FinishedAt.Sub(result.StartedAt).Seconds())
+	if !result.StartedAt.IsZero() && !result.FinishedAt.IsZero() {
+		m.RunSeconds.Observe(result.FinishedAt.Sub(result.StartedAt).Seconds())
+	}
 }

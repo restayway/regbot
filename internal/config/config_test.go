@@ -72,6 +72,42 @@ func TestValidateRejectsUnsafeLimits(t *testing.T) {
 	}
 }
 
+func TestScheduleValidation(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "regbot.yaml")
+	data := strings.Replace(validConfig, "apply: false", `apply: false
+schedule:
+  cron: "17 3 * * *"
+  timezone: Europe/Istanbul
+  timeout: 1h`, 1)
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Schedule == nil || cfg.Schedule.Cron != "17 3 * * *" {
+		t.Fatalf("unexpected schedule: %+v", cfg.Schedule)
+	}
+
+	invalid := strings.Replace(data, "17 3 * * *", "not a cron", 1)
+	if err := os.WriteFile(path, []byte(invalid), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Load(path); err == nil {
+		t.Fatal("expected invalid cron error")
+	}
+
+	invalid = strings.Replace(data, "Europe/Istanbul", "Invalid/Timezone", 1)
+	if err := os.WriteFile(path, []byte(invalid), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Load(path); err == nil {
+		t.Fatal("expected invalid timezone error")
+	}
+}
+
 func TestExampleConfigurationLoads(t *testing.T) {
 	t.Parallel()
 	for _, path := range []string{
