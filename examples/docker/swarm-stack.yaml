@@ -1,0 +1,73 @@
+version: "3.9"
+
+services:
+  regbot:
+    image: ${REGBOT_IMAGE:-ghcr.io/restayway/regbot:v0.1.0}
+    command:
+      - serve
+      - --config
+      - /etc/regbot/regbot.yaml
+      - --listen
+      - 0.0.0.0:8080
+      - --run-token-file
+      - /run/secrets/regbot_run_token
+      - --log-format
+      - json
+    user: "65532:65532"
+    read_only: true
+    configs:
+      - source: regbot_config
+        target: /etc/regbot/regbot.yaml
+        mode: 0444
+    secrets:
+      - registry_username
+      - registry_password
+      - regbot_run_token
+    networks:
+      - regbot
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/regbot", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+      update_config:
+        order: stop-first
+        parallelism: 1
+        failure_action: rollback
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          cpus: "0.05"
+          memory: 32M
+
+configs:
+  regbot_config:
+    file: ./swarm-regbot.yaml
+
+secrets:
+  registry_username:
+    external: true
+  registry_password:
+    external: true
+  regbot_run_token:
+    external: true
+
+networks:
+  regbot:
+    driver: overlay
+    attachable: true

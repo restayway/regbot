@@ -1,0 +1,28 @@
+name: Bug report
+description: Report incorrect or unsafe behavior
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the observed and expected behavior.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Regbot version
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Redacted configuration and output
+      description: Remove tokens, usernames, private hostnames, and digests.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed all credentials and sensitive registry information.
+          required: true

@@ -1,0 +1,35 @@
+version: v1
+apply: false
+
+registries:
+  github:
+    provider: github
+    owner: restayway
+    owner_type: organization
+    token_env: GITHUB_TOKEN
+    timeout: 30s
+
+policies:
+  github-calendar-images:
+    targets:
+      - registry: github
+        repositories:
+          include: ["*"]
+    tags:
+      parser: calendar
+      patterns:
+        - "vYYYY.MM.DD.x"
+        - "vYYYY.MM.DD.x-{app}"
+    retention:
+      keep_newer_than: 168h
+      delete_older_than: 720h
+      keep_latest: 5
+      keep_at_least: 1
+      group_by: app
+    protect:
+      tags: ["latest", "stable", "prod"]
+      unparsed_tags: true
+    safety:
+      max_delete_count: 50
+      max_delete_percent: 20
+      require_tagged_artifact: true
