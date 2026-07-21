@@ -183,6 +183,16 @@ func executeScheduledRun(ctx context.Context, runner *engine.Engine) (scheduler.
 		return summary, nil
 	}
 	result, applyErr := runner.Apply(ctx, proposal)
+	for _, outcome := range result.Outcomes {
+		if outcome.Status == "failed" {
+			runner.Logger.Warn("deletion failed",
+				"registry", outcome.Action.Artifact.Registry,
+				"repository", outcome.Action.Artifact.Repository,
+				"id", outcome.Action.Artifact.ID,
+				"error", outcome.Error,
+			)
+		}
+	}
 	deliverHookLogged(ctx, runner, result)
 	summary.Result = result
 	return summary, applyErr
