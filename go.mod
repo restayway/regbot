@@ -1,8 +1,6 @@
 module github.com/restayway/regbot
 
-go 1.25.0
-
-toolchain go1.26.5
+go 1.27.4
 
 require (
 	github.com/prometheus/client_golang v1.24.0
